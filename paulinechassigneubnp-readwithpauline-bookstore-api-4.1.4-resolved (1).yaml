@@ -1,0 +1,1661 @@
+openapi: 3.0.3
+info:
+  title: ReadWithPauline Bookstore API
+  description: "RESTful API for browsing books, placing orders, managing customers, and availability notifications. All requests use HTTPS with JSON. Authentication via API key header: Authorization: ApiKey YOUR_API_KEY. \r\nComplete documentation available via this link: \r\n**https://docs.google.com/document/d/1flBuyFfAUju18uuRvy_Noh1P9YN0FkQUhzjNJJS5V98/edit?usp=sharing**"
+  contact:
+    name: ReadWithPauline
+    url: https://readwithpauline.com
+    email: pauline.chassigneu@gmail.com
+  version: 4.1.4
+servers:
+- url: https://api.readwithpauline.com/v3.1
+  description: Production
+- url: http://localhost:8080/v3.1
+  description: Local development
+security:
+- ApiKeyAuth: []
+tags:
+- name: Books
+  description: Endpoints related to book browsing and management.
+- name: Customers
+  description: Endpoints for managing customers (profile and account).
+- name: Orders
+  description: Endpoints for creating and managing orders.
+- name: Notifications
+  description: Endpoints for subscribing to availability notifications.
+paths:
+  /api/books:
+    get:
+      tags:
+      - Books
+      summary: List books
+      description: Returns a paginated list of books. Supports optional filters.
+      parameters:
+      - name: title
+        in: query
+        description: "Filter by title (contains, case-insensitive)."
+        required: false
+        schema:
+          type: string
+      - name: author
+        in: query
+        description: Filter by author.
+        required: false
+        schema:
+          type: string
+      - name: category
+        in: query
+        description: Filter by category.
+        required: false
+        schema:
+          type: string
+      - name: priceMin
+        in: query
+        description: Minimum price (EUR).
+        required: false
+        schema:
+          type: number
+          format: float
+      - name: priceMax
+        in: query
+        description: Maximum price (EUR).
+        required: false
+        schema:
+          type: number
+          format: float
+      - name: page
+        in: query
+        required: false
+        schema:
+          minimum: 1
+          type: integer
+          default: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          default: 20
+      responses:
+        "200":
+          description: List of books (paginated).
+          headers:
+            X-RateLimit-Limit:
+              description: Max requests per minute.
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              description: Remaining requests in the current window.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200"
+              examples:
+                list:
+                  $ref: "#/components/examples/BooksList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags:
+      - Books
+      summary: Create a book (admin)
+      description: Admin-only endpoint to add a new book.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookCreate"
+            examples:
+              valid:
+                $ref: "#/components/examples/BookCreateValid"
+        required: true
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              description: URL of the created resource.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+              examples:
+                created:
+                  $ref: "#/components/examples/BookCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Duplicate ISBN/EAN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                duplicateIsbn:
+                  $ref: "#/components/examples/BookDuplicateIsbn"
+  /api/books/{bookId}:
+    get:
+      tags:
+      - Books
+      summary: Get a book by ID
+      parameters:
+      - name: bookId
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          description: Book details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookDetails"
+              examples:
+                details:
+                  $ref: "#/components/examples/BookDetailsExample"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Book not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                notFound:
+                  $ref: "#/components/examples/BookNotFound"
+    put:
+      tags:
+      - Books
+      summary: Update a book (admin)
+      description: Admin-only endpoint to update an existing book.
+      parameters:
+      - name: bookId
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookUpdate"
+            examples:
+              update:
+                $ref: "#/components/examples/BookUpdateValid"
+        required: true
+      responses:
+        "200":
+          description: Updated book
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+              examples:
+                updated:
+                  $ref: "#/components/examples/BookUpdated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Conflict (e.g., duplicate ISBN/EAN)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags:
+      - Books
+      summary: Delete a book (admin)
+      description: Admin-only endpoint to delete a book from the catalog.
+      parameters:
+      - name: bookId
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+      responses:
+        "204":
+          description: Deleted (no content).
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/customers:
+    post:
+      tags:
+      - Customers
+      summary: Register a customer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerCreate"
+            examples:
+              valid:
+                $ref: "#/components/examples/CustomerCreateValid"
+        required: true
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+              examples:
+                created:
+                  $ref: "#/components/examples/CustomerCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                duplicateEmail:
+                  $ref: "#/components/examples/CustomerEmailExists"
+  /api/customers/{customerId}:
+    get:
+      tags:
+      - Customers
+      summary: Get customer profile
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Customer profile (no password hash).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+              examples:
+                profile:
+                  $ref: "#/components/examples/CustomerProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags:
+      - Customers
+      summary: Update customer profile
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerUpdate"
+            examples:
+              updateAddress:
+                $ref: "#/components/examples/CustomerUpdateAddress"
+        required: true
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+              examples:
+                updated:
+                  $ref: "#/components/examples/CustomerUpdated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+      - Customers
+      summary: Delete a customer (GDPR) — SUPER ADMIN ONLY
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_1"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Customer has existing order(s)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                hasOrders:
+                  $ref: "#/components/examples/CustomerHasOrders"
+  /api/orders:
+    post:
+      tags:
+      - Orders
+      summary: Create an order
+      description: Includes generated order_code (ORD-YYMMDD-XXXX).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreate"
+            examples:
+              valid:
+                $ref: "#/components/examples/OrderCreateValid"
+        required: true
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              examples:
+                created:
+                  $ref: "#/components/examples/OrderCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Stock/Conflict error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                outOfStock:
+                  $ref: "#/components/examples/OrderOutOfStock"
+        "422":
+          description: Payment failure or semantically invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                paymentFailed:
+                  $ref: "#/components/examples/OrderPaymentFailed"
+  /api/orders/{orderCode}:
+    get:
+      tags:
+      - Orders
+      summary: Get an order
+      description: Includes generated order_code (ORD-YYMMDD-XXXX).
+      parameters:
+      - name: orderCode
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: string
+      responses:
+        "200":
+          description: Order with items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              examples:
+                example:
+                  $ref: "#/components/examples/OrderDetails"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags:
+      - Orders
+      summary: Update order status
+      description: |-
+        Change status (e.g., processing → shipped).
+        Includes generated order_code (ORD-YYMMDD-XXXX).
+      parameters:
+      - name: orderCode
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/orders_orderId_body"
+            examples:
+              shipped:
+                $ref: "#/components/examples/OrderUpdateShipped"
+        required: true
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/orders/{orderId}/cancel:
+    put:
+      tags:
+      - Orders
+      summary: Cancel an order
+      description: Includes generated order_code (ORD-YYMMDD-XXXX).
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              examples:
+                cancelled:
+                  $ref: "#/components/examples/OrderCancelled"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Cannot cancel shipped/delivered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                cannotCancel:
+                  $ref: "#/components/examples/OrderCannotCancel"
+  /api/notifications/availability:
+    get:
+      tags:
+      - Notifications
+      summary: List availability subscriptions
+      description: Returns a paginated list of availability notification subscriptions. Clients can list their own subscriptions; admins may list all.
+      parameters:
+      - name: bookId
+        in: query
+        description: Filter by book ID.
+        required: false
+        schema:
+          minimum: 1
+          type: integer
+      - name: customerId
+        in: query
+        description: Filter by customer ID.
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          minimum: 1
+          type: integer
+          default: 1
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          default: 20
+      responses:
+        "200":
+          description: List of subscriptions (paginated).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_2"
+              examples:
+                list:
+                  $ref: "#/components/examples/NotificationList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    post:
+      tags:
+      - Notifications
+      summary: Subscribe to book availability
+      description: "Includes notification status (pending, sent, failed)."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/notifications_availability_body"
+            examples:
+              valid:
+                $ref: "#/components/examples/NotificationSubscribeValid"
+        required: true
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+              examples:
+                created:
+                  $ref: "#/components/examples/NotificationCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Duplicate subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                duplicate:
+                  $ref: "#/components/examples/NotificationDuplicate"
+        "422":
+          description: Book already available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                inStock:
+                  $ref: "#/components/examples/NotificationInStock"
+  /api/notifications/availability/{id}:
+    delete:
+      tags:
+      - Notifications
+      summary: Unsubscribe from availability notifications
+      description: Removes an existing availability notification subscription by ID.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Deleted (no content).
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate customer and return API key
+      description: Authenticate a customer using email and password. Returns an API key and expiration timestamp.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/auth_login_body"
+        required: true
+      responses:
+        "200":
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_3"
+        "400":
+          description: "VALIDATION_FAILED: Missing email or password"
+        "401":
+          description: "AUTH_INVALID_CREDENTIALS: Invalid email or password"
+  /api/auth/regenerate-key:
+    post:
+      tags:
+      - Authentication
+      summary: Generate new API key (invalidates old one)
+      description: Generate a new API key for an authenticated customer. The old key is invalidated.
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+        example: ApiKey cus_old_key_here
+      responses:
+        "200":
+          description: New API key generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_4"
+components:
+  schemas:
+    Book:
+      required:
+      - author
+      - category
+      - ean
+      - id
+      - isbn
+      - price
+      - stock
+      - title
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Auto-incremented unique book identifier
+          example: 1
+        title:
+          type: string
+          example: Le Comte de Monte-Cristo
+        author:
+          type: string
+          example: Alexandre Dumas
+        price:
+          minimum: 0
+          type: number
+          description: "Price in EUR, rounded to 2 decimals"
+          format: float
+          example: 20.91
+        description:
+          type: string
+        category:
+          type: string
+          example: Classic Literature
+        stock:
+          minimum: 0
+          type: integer
+          example: 9
+        isbn:
+          pattern: "^[0-9]{13}$"
+          type: string
+          example: "9782072895640"
+        ean:
+          pattern: "^[0-9]{13}$"
+          type: string
+          example: "9782072895640"
+        publicationDate:
+          type: string
+          format: date
+          example: 2020-09-15
+        publisher:
+          type: string
+          example: Éditions Gallimard
+        summary:
+          type: string
+    BookCreate:
+      required:
+      - author
+      - category
+      - ean
+      - isbn
+      - price
+      - stock
+      - title
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        price:
+          minimum: 0
+          type: number
+          format: float
+        category:
+          type: string
+        stock:
+          minimum: 0
+          type: integer
+        isbn:
+          pattern: "^[0-9]{13}$"
+          type: string
+        ean:
+          pattern: "^[0-9]{13}$"
+          type: string
+        description:
+          type: string
+        publicationDate:
+          type: string
+          format: date
+        publisher:
+          type: string
+        summary:
+          type: string
+    BookUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        price:
+          minimum: 0
+          type: number
+          format: float
+        category:
+          type: string
+        stock:
+          minimum: 0
+          type: integer
+        isbn:
+          pattern: "^[0-9]{13}$"
+          type: string
+        ean:
+          pattern: "^[0-9]{13}$"
+          type: string
+        description:
+          type: string
+        publicationDate:
+          type: string
+          format: date
+        publisher:
+          type: string
+        summary:
+          type: string
+      description: Fields allowed to be updated for a book (partial updates).
+    BookDetails:
+      allOf:
+      - $ref: "#/components/schemas/Book"
+      - type: object
+        properties:
+          rating:
+            maximum: 5
+            minimum: 0
+            type: number
+            format: float
+            example: 4.8
+          shareLinks:
+            $ref: "#/components/schemas/BookDetails_shareLinks"
+    Address:
+      required:
+      - city
+      - country
+      - postalCode
+      - streetName
+      - streetNumber
+      type: object
+      properties:
+        streetNumber:
+          pattern: "^[0-9]+[A-Za-z]?$"
+          type: string
+          description: Digits with an optional trailing letter
+          example: 35B
+        streetName:
+          maxLength: 100
+          minLength: 2
+          type: string
+          example: Avenue Alphonse XIII
+        postalCode:
+          pattern: "^[0-9]{4,5}$"
+          type: string
+          description: "FR: 5 digits, BE: 4 digits (validated server-side against country)"
+          example: "1180"
+        city:
+          type: string
+          example: UCCLE
+        state:
+          type: string
+          nullable: true
+          example: Brussels-Capital
+        country:
+          type: string
+          example: BE
+          enum:
+          - FR
+          - BE
+    Customer:
+      required:
+      - address
+      - createdAt
+      - customerId
+      - email
+      - firstName
+      - lastName
+      - phoneNumber
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        firstName:
+          type: string
+          description: Stored capitalized
+          example: PAULINE
+        lastName:
+          type: string
+          description: Stored capitalized
+          example: CHASSIGNEU
+        email:
+          type: string
+          format: email
+          example: pauline.chassigneu@gmail.com
+        phoneNumber:
+          type: string
+          description: "E.164 format (+[country][number])"
+          example: "+33616382531"
+        createdAt:
+          type: string
+          format: date-time
+        address:
+          $ref: "#/components/schemas/Address"
+    CustomerCreate:
+      required:
+      - address
+      - email
+      - firstName
+      - lastName
+      - password
+      - phoneNumber
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+        password:
+          minLength: 12
+          type: string
+          description: ">=12 chars, with uppercase, lowercase, digit, special character"
+        address:
+          $ref: "#/components/schemas/Address"
+    CustomerUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phoneNumber:
+          type: string
+        address:
+          $ref: "#/components/schemas/Address"
+        passwordChange:
+          $ref: "#/components/schemas/CustomerUpdate_passwordChange"
+    OrderItem:
+      required:
+      - bookId
+      - quantity
+      - unitPrice
+      type: object
+      properties:
+        bookId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Le Comte de Monte-Cristo
+        quantity:
+          minimum: 1
+          type: integer
+          example: 2
+        unitPrice:
+          type: number
+          format: float
+          example: 20.91
+    Order:
+      required:
+      - customerId
+      - deliveryMethod
+      - items
+      - orderCode
+      - orderDate
+      - orderId
+      - order_code
+      - order_id
+      - paymentMethod
+      - shippingAddress
+      - status
+      - totalAmount
+      type: object
+      properties:
+        orderId:
+          type: integer
+          example: 1
+        orderCode:
+          type: string
+          example: "12345"
+        orderDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          example: processing
+          enum:
+          - processing
+          - shipped
+          - delivered
+          - cancelled
+        totalAmount:
+          type: number
+          format: float
+          example: 41.82
+        paymentMethod:
+          type: string
+          example: card
+          enum:
+          - card
+          - paypal
+          - apple_pay
+          - bancontact
+        deliveryMethod:
+          type: string
+          example: standard
+          enum:
+          - standard
+          - same-day
+          - express
+        customerId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        shippingAddress:
+          $ref: "#/components/schemas/Address"
+        order_id:
+          type: integer
+          description: "Primary key (unique order ID). Internal database identifier, auto-incremented by the database. Never exposed in API responses."
+          format: int32
+          example: 123
+        order_code:
+          type: string
+          description: "Public order code automatically generated by the database. Format: ORD-YYMMDD-XXXX (e.g. ORD-251018-0001)."
+          example: ORD-251018-0001
+    OrderCreate:
+      required:
+      - customerId
+      - deliveryMethod
+      - items
+      - paymentMethod
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        items:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderCreate_items"
+        paymentMethod:
+          type: string
+          enum:
+          - card
+          - paypal
+          - apple_pay
+          - bancontact
+        deliveryMethod:
+          type: string
+          enum:
+          - standard
+          - same-day
+          - express
+    Notification:
+      required:
+      - bookId
+      - createdAt
+      - customerId
+      - id
+      - status
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1"
+        bookId:
+          type: integer
+          example: 1
+        customerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          description: Notification sending status.
+          example: pending
+          default: pending
+          enum:
+          - pending
+          - sent
+          - failed
+      description: "### 📬 Availability Notification Workflow\n\n**Process:**  \n- Job runs every 5 minutes  \n- Retrieves notifications with `status = 'pending'`  \n- Sends the corresponding emails  \n- Updates `status = 'sent'` after successful delivery\n\n**Email format example:**\n\n```\nTo: {customer.email}\nSubject: 📚 \"{book.title}\" is back in stock!\n\nHi {customer.firstName},\n\nGreat news! The book you were waiting for is now available:\n\n📖 {book.title}\n✍️ by {book.author}\n💰 {book.price} EUR\n\n[View Book] [Order Now]\n\nThis is a one-time notification. Visit our store to discover more books.\n\nBest regards,\nReadWithPauline Team\n```\n"
+    Error:
+      required:
+      - code
+      - error
+      - message
+      - path
+      - status
+      - timestamp
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Bad Request
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Clear error message
+        path:
+          type: string
+          example: /api/books
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/Error_details"
+    inline_response_200:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 2
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Book"
+    inline_response_200_1:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Customer deleted
+    orders_orderId_body:
+      required:
+      - status
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - processing
+          - shipped
+          - delivered
+          - cancelled
+    inline_response_200_2:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+    notifications_availability_body:
+      required:
+      - bookId
+      - customerId
+      type: object
+      properties:
+        bookId:
+          minimum: 1
+          type: integer
+        customerId:
+          type: string
+          format: uuid
+    BookDetails_shareLinks:
+      type: object
+      properties:
+        web:
+          type: string
+          format: uri
+        email:
+          type: string
+        facebook:
+          type: string
+          format: uri
+        x:
+          type: string
+          format: uri
+    CustomerUpdate_passwordChange:
+      type: object
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          minLength: 12
+          type: string
+    OrderCreate_items:
+      required:
+      - bookId
+      - quantity
+      type: object
+      properties:
+        bookId:
+          minimum: 1
+          type: integer
+        quantity:
+          minimum: 1
+          type: integer
+        unitPrice:
+          type: number
+          description: Optional; backend calculates authoritative total.
+          format: float
+    Error_details:
+      type: object
+      properties:
+        field:
+          type: string
+        issue:
+          type: string
+    auth_login_body:
+      required:
+      - email
+      - password
+      type: object
+      properties:
+        email:
+          type: string
+          example: pauline.chassigneu@gmail.com
+        password:
+          type: string
+          example: P@ulineBTW20
+    inline_response_200_3:
+      type: object
+      properties:
+        customerId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        apiKey:
+          type: string
+          example: cus_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+        expiresAt:
+          type: string
+          format: date-time
+          example: 2026-01-23T15:45:30Z
+    inline_response_200_4:
+      type: object
+      properties:
+        apiKey:
+          type: string
+          example: cus_new_key_here
+        expiresAt:
+          type: string
+          format: date-time
+          example: 2026-01-23T15:45:30Z
+  responses:
+    UnauthorizedError:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            missing:
+              $ref: "#/components/examples/AuthMissingApiKey"
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            forbidden:
+              $ref: "#/components/examples/AuthInsufficientPermissions"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            notFound:
+              $ref: "#/components/examples/GenericNotFound"
+    BadRequest:
+      description: Bad request or validation failure
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            invalidIsbn:
+              $ref: "#/components/examples/BookInvalidIsbn"
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            description: Seconds until reset
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            throttled:
+              $ref: "#/components/examples/RateLimitExceeded"
+  examples:
+    BooksList:
+      value:
+        page: 1
+        limit: 20
+        total: 2
+        items:
+        - id: 1
+          title: Le Comte de Monte-Cristo
+          author: Alexandre Dumas
+          price: 20.91
+          category: Classic Literature
+          stock: 9
+          isbn: "9782072895640"
+          ean: "9782072895640"
+        - id: 2
+          title: L'Étranger
+          author: Albert Camus
+          price: 8.9
+          category: Classic Literature
+          stock: 3
+          isbn: "9782070360027"
+          ean: "9782070360027"
+    BookCreateValid:
+      value:
+        title: Le Comte de Monte-Cristo
+        author: Alexandre Dumas
+        price: 20.91
+        category: Classic Literature
+        stock: 9
+        isbn: "9782072895640"
+        ean: "9782072895640"
+        description: "A timeless adventure novel by Alexandre Dumas, first published in 1844"
+    BookCreated:
+      value:
+        id: 3
+        title: Le Comte de Monte-Cristo
+        author: Alexandre Dumas
+        price: 20.91
+        category: Classic Literature
+        stock: 9
+        isbn: "9782072895640"
+        ean: "9782072895640"
+    BookDuplicateIsbn:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 409
+        error: Conflict
+        code: BOOK_INVALID_ISBN
+        message: Book with this ISBN already exists
+        path: /api/books
+    BookDetailsExample:
+      value:
+        id: 1
+        title: Le Comte de Monte-Cristo
+        author: Alexandre Dumas
+        price: 20.91
+        description: "A timeless adventure novel by Alexandre Dumas, first published in 1844"
+        category: Classic Literature
+        stock: 9
+        isbn: "9782072895640"
+        ean: "9782072895640"
+        publicationDate: 2020-09-15
+        publisher: Éditions Gallimard
+        summary: An epic tale of revenge and redemption
+        rating: 4.8
+        shareLinks:
+          web: https://readwithpauline.com/books/le-comte-de-monte-cristo
+          email: mailto:?subject=Check%20this%20book!&body=https://readwithpauline.com/books/le-comte-de-monte-cristo
+          facebook: https://www.facebook.com/sharer/sharer.php?u=https://readwithpauline.com/books/le-comte-de-monte-cristo
+          x: https://twitter.com/intent/tweet?url=https://readwithpauline.com/books/le-comte-de-monte-cristo
+    BookNotFound:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 404
+        error: Not Found
+        code: BOOK_NOT_FOUND
+        message: Book ID doesn’t exist
+        path: /api/books/99999
+    BookInvalidIsbn:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 400
+        error: Bad Request
+        code: BOOK_INVALID_ISBN
+        message: ISBN must contain 13 characters
+        path: /api/books
+    BookUpdateValid:
+      value:
+        price: 18.99
+        stock: 12
+        description: New print with updated preface
+    BookUpdated:
+      value:
+        id: 1
+        title: Le Comte de Monte-Cristo
+        author: Alexandre Dumas
+        price: 18.99
+        category: Classic Literature
+        stock: 12
+        isbn: "9782072895640"
+        ean: "9782072895640"
+    CustomerCreateValid:
+      value:
+        firstName: Pauline
+        lastName: CHASSIGNEU
+        email: pauline.chassigneu@gmail.com
+        phoneNumber: "+33616382531"
+        password: P@ulineBTW20
+        address:
+          streetNumber: 35B
+          streetName: Avenue Alphonse XIII
+          postalCode: "1180"
+          city: UCCLE
+          state: Brussels-Capital
+          country: BE
+    CustomerCreated:
+      value:
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        firstName: PAULINE
+        lastName: CHASSIGNEU
+        email: pauline.chassigneu@gmail.com
+        phoneNumber: "+33616382531"
+        createdAt: 2025-10-18 15:45:30+00:00
+        address:
+          streetNumber: 35B
+          streetName: Avenue Alphonse XIII
+          postalCode: "1180"
+          city: UCCLE
+          state: Brussels-Capital
+          country: BE
+    CustomerEmailExists:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 409
+        error: Conflict
+        code: CUSTOMER_EMAIL_EXISTS
+        message: Email already registered
+        path: /api/customers
+    CustomerProfile:
+      value:
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        firstName: PAULINE
+        lastName: CHASSIGNEU
+        email: pauline.chassigneu@gmail.com
+        phoneNumber: "+33616382531"
+        createdAt: 2025-10-18 15:45:30+00:00
+        address:
+          streetNumber: 35B
+          streetName: Avenue Alphonse XIII
+          postalCode: "1180"
+          city: UCCLE
+          state: Brussels-Capital
+          country: BE
+    CustomerUpdateAddress:
+      value:
+        address:
+          streetNumber: "12"
+          streetName: Rue de la Paix
+          postalCode: "75002"
+          city: PARIS
+          country: FR
+    CustomerUpdated:
+      value:
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        firstName: PAULINE
+        lastName: CHASSIGNEU
+        email: pauline.chassigneu@gmail.com
+        phoneNumber: "+33123456789"
+        createdAt: 2025-10-18 15:45:30+00:00
+        address:
+          streetNumber: "12"
+          streetName: Rue de la Paix
+          postalCode: "75002"
+          city: PARIS
+          country: FR
+    CustomerHasOrders:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 409
+        error: Conflict
+        code: CUSTOMER_HAS_ORDERS
+        message: Customer has existing order(s)
+        path: /api/customers/550e8400-e29b-41d4-a716-446655440000
+    OrderCreateValid:
+      value:
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        paymentMethod: card
+        deliveryMethod: standard
+        items:
+        - bookId: 1
+          quantity: 2
+          unitPrice: 20.91
+    OrderCreated:
+      value:
+        orderId: 1
+        orderCode: ORD-000001
+        orderDate: 2025-10-18 12:09:00+00:00
+        status: processing
+        totalAmount: 41.82
+        paymentMethod: card
+        deliveryMethod: standard
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        items:
+        - bookId: 1
+          title: Le Comte de Monte-Cristo
+          quantity: 2
+          unitPrice: 20.91
+        shippingAddress:
+          streetNumber: 35B
+          streetName: Avenue Alphonse XIII
+          postalCode: "1180"
+          city: UCCLE
+          country: BE
+    OrderOutOfStock:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 409
+        error: Conflict
+        code: BOOK_OUT_OF_STOCK
+        message: Insufficient stock for requested quantity
+        path: /api/orders
+    OrderPaymentFailed:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 422
+        error: Unprocessable Entity
+        code: ORDER_PAYMENT_FAILED
+        message: Transaction declined by payment processor
+        path: /api/orders
+    OrderDetails:
+      value:
+        orderId: 1
+        orderCode: ORD-000001
+        orderDate: 2025-10-18 12:09:00+00:00
+        status: processing
+        totalAmount: 41.82
+        paymentMethod: card
+        deliveryMethod: standard
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        items:
+        - bookId: 1
+          title: Le Comte de Monte-Cristo
+          quantity: 2
+          unitPrice: 20.91
+        shippingAddress:
+          streetNumber: 35B
+          streetName: Avenue Alphonse XIII
+          postalCode: "1180"
+          city: UCCLE
+          country: BE
+    OrderUpdateShipped:
+      value:
+        status: shipped
+    OrderCancelled:
+      value:
+        orderId: 1
+        status: cancelled
+    OrderCannotCancel:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 409
+        error: Conflict
+        code: ORDER_CANNOT_CANCEL
+        message: Shipped orders cannot be cancelled
+        path: /api/orders/1/cancel
+    NotificationSubscribeValid:
+      value:
+        bookId: 1
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+    NotificationCreated:
+      value:
+        id: n000000001
+        bookId: 1
+        customerId: 550e8400-e29b-41d4-a716-446655440000
+        createdAt: 2025-10-18 12:09:00+00:00
+    NotificationList:
+      value:
+        page: 1
+        limit: 20
+        total: 1
+        items:
+        - id: n000000001
+          bookId: 1
+          customerId: 550e8400-e29b-41d4-a716-446655440000
+          createdAt: 2025-10-18 12:09:00+00:00
+    NotificationDuplicate:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 409
+        error: Conflict
+        code: NOTIFICATION_ALREADY_EXISTS
+        message: Notification already created
+        path: /api/notifications/availability
+    NotificationInStock:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 422
+        error: Unprocessable Entity
+        code: NOTIFICATION_BOOK_AVAILABLE
+        message: Book is currently available
+        path: /api/notifications/availability
+    NotificationDeleted:
+      value:
+        message: Subscription deleted
+    AuthMissingApiKey:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 401
+        error: Unauthorized
+        code: AUTH_MISSING_API_KEY
+        message: API key missing from Authorization header
+        path: /api/books
+    AuthInsufficientPermissions:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 403
+        error: Forbidden
+        code: AUTH_INSUFFICIENT_PERMISSIONS
+        message: Valid API key but insufficient rights
+        path: /api/books
+    GenericNotFound:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 404
+        error: Not Found
+        code: NOT_FOUND
+        message: Requested resource doesn’t exist
+        path: /api/resource
+    RateLimitExceeded:
+      value:
+        timestamp: 2025-10-18 12:09:00+00:00
+        status: 429
+        error: Too Many Requests
+        code: RATE_LIMIT_EXCEEDED
+        message: Too many requests within allowed time window
+        path: /api/books
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      description: "Use the format: Authorization: ApiKey YOUR_API_KEY"
+      name: Authorization
+      in: header
